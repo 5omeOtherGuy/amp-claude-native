@@ -15,9 +15,16 @@ not send: the Claude Code identity as the first `system` block, and the `anthrop
 `429 rate_limit_error "Error"` (Haiku 4.5 does not care); measured 2026-10-29 from this repo's
 `scripts/live-check.mjs` and a direct probe. Request content is not logged.
 
-Status 2026-10-29: Worker verified live from Node against Anthropic (Haiku 4.5, Sonnet 4.6,
-Opus 4.6, Opus 5.5, Fable 5.1 all stream), not yet deployed. Deployment and the Amp connection
-need three owner steps (below).
+Status 2026-10-29: deployed at `https://amp-claude-native.simon-gies.workers.dev` and in use by
+the Amp connection "Claude Subscription via amp-claude-native" (id ffa5cec0-0ccc-4438-a3dc-265cfde5f664).
+A high-mode thread answered as Claude with `amp threads usage --details` showing every request
+"Via Claude Subscription via amp-claude-native", cost $0. Amp still labels the model by its own
+ID (GPT-6 Astra) in that table; the Routing column and the `providerModelID` in `check-access`
+show the Claude model actually served.
+
+Adaptive-only models (Opus 4.7+, Opus 5.x, Fable 5.x, Sonnet 5.x, Haiku 5.5) reject the
+`thinking: {type: "disabled"}` or manual budgets Amp sends; the Worker rewrites those to adaptive
+thinking with an effort and drops temperature (`shapeThinking`, measured 2026-10-29 with Opus 5.5).
 
 ## Layout
 

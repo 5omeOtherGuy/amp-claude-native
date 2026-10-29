@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { CLAUDE_CODE_IDENTITY, INTERLEAVED_THINKING_BETA, mergeBetas, shapeSystem } from "../src/shape.ts";
+import { CLAUDE_CODE_IDENTITY, INTERLEAVED_THINKING_BETA, mergeBetas, shapeSystem, shapeThinking } from "../src/shape.ts";
 import worker, { keysEqual } from "../src/index.ts";
 
 const ID = { type: "text", text: CLAUDE_CODE_IDENTITY };
@@ -38,6 +38,25 @@ test("betas: required first, incoming kept, no duplicates", () => {
     `oauth-2025-04-20,claude-code-20250219,${INTERLEAVED_THINKING_BETA}`,
   );
   assert.equal(mergeBetas(null, { thinking: { type: "adaptive" } }), "oauth-2025-04-20,claude-code-20250219");
+});
+
+test("thinking: adaptive-only models get adaptive thinking instead of disabled/manual", () => {
+  assert.deepEqual(
+    shapeThinking({ model: "claude-opus-5-5", thinking: { type: "disabled" }, temperature: 0 }),
+    { model: "claude-opus-5-5", thinking: { type: "adaptive" }, output_config: { effort: "low" } },
+  );
+  assert.deepEqual(
+    shapeThinking({ model: "claude-fable-5-1", thinking: { type: "enabled", budget_tokens: 32000 } }),
+    { model: "claude-fable-5-1", thinking: { type: "adaptive" }, output_config: { effort: "high" } },
+  );
+  assert.deepEqual(
+    shapeThinking({ model: "claude-opus-4-7", thinking: { type: "disabled" }, output_config: { effort: "xhigh" } }),
+    { model: "claude-opus-4-7", thinking: { type: "adaptive" }, output_config: { effort: "xhigh" } },
+  );
+  const manual = { model: "claude-opus-4-6", thinking: { type: "enabled", budget_tokens: 4096 }, temperature: 1 };
+  assert.deepEqual(shapeThinking(manual), manual);
+  const bare = { model: "claude-opus-5-5", max_tokens: 5 };
+  assert.deepEqual(shapeThinking(bare), bare);
 });
 
 test("keysEqual", () => {

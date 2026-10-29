@@ -74,7 +74,43 @@ export function mergeBetas(incoming: string | null, body: Json): string {
   return out.join(",");
 }
 
+// Models that only accept adaptive thinking. Amp does not know which Claude
+// model a mapping sends to, so it may send `thinking: {type: "disabled"}` or a
+// manual budget, which these models reject with 400 ("thinking.type.disabled"
+// is not supported for this model; measured 2026-10-29 with claude-opus-5-5).
+// Same family list as pi-claude-subscription's model table on 2026-10-29.
+export const ADAPTIVE_ONLY_MODEL = /^claude-(opus-4-[78]|opus-5|fable-5|sonnet-5|haiku-5)/;
+
+function effortForBudget(budget: unknown): string {
+  if (typeof budget !== "number") return "medium";
+  if (budget < 4096) return "low";
+  if (budget < 16384) return "medium";
+  return "high";
+}
+
+/**
+ * For adaptive-only models, translates a disabled or manual-budget thinking
+ * request into adaptive thinking with an effort, and drops sampling fields
+ * these models refuse. Other models are passed through unchanged.
+ */
+export function shapeThinking(body: Json): Json {
+  if (typeof body.model !== "string" || !ADAPTIVE_ONLY_MODEL.test(body.model)) return body;
+  const out: Json = { ...body };
+  delete out.temperature;
+  delete out.top_p;
+  delete out.top_k;
+  const thinking = out.thinking;
+  if (!thinking || typeof thinking !== "object") return out;
+  const type = (thinking as Json).type;
+  if (type !== "disabled" && type !== "enabled") return out;
+  const existing = out.output_config && typeof out.output_config === "object" ? (out.output_config as Json) : {};
+  const effort = typeof existing.effort === "string" ? existing.effort : type === "disabled" ? "low" : effortForBudget((thinking as Json).budget_tokens);
+  out.thinking = { type: "adaptive" };
+  out.output_config = { ...existing, effort };
+  return out;
+}
+
 /** Shapes a Messages or count_tokens request body for the OAuth lane. */
 export function shapeBody(body: Json): Json {
-  return { ...body, system: shapeSystem(body.system) };
+  return shapeThinking({ ...body, system: shapeSystem(body.system) });
 }
