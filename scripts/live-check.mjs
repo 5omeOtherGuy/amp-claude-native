@@ -1,7 +1,8 @@
 // Runs the Worker's fetch handler in Node against the real Anthropic API,
 // authenticated with the Claude Code OAuth token of this machine's Claude Code
-// login (or CLAUDE_TOKEN from the environment). Prints status codes, and the
-// start of the error body when a request fails.
+// login (or CLAUDE_TOKEN from the environment). Sends what Amp sends: a plain
+// system prompt, Amp's model ID with prefix, thinking disabled. Prints status
+// codes, and the start of the error body when a request fails.
 //
 //   node scripts/live-check.mjs [model ...]
 import { readFile } from "node:fs/promises";
@@ -21,15 +22,15 @@ async function token() {
 }
 
 const env = { CLAUDE_TOKEN: await token(), PROXY_KEY: "live-check-key" };
-const models = process.argv.slice(2).length ? process.argv.slice(2) : ["claude-haiku-4-5", "claude-sonnet-4-6", "claude-opus-4-6"];
-let failed = 0;
+const args = process.argv.slice(2);
+const models = args.length ? args : ["anthropic/claude-sonnet-4-6", "anthropic/claude-opus-4-6", "anthropic/claude-opus-5-5"];
 
 for (const model of models) {
-  // The system prompt deliberately lacks the identity: that is what Amp sends.
   const body = {
     model,
     max_tokens: 16,
     stream: true,
+    thinking: { type: "disabled" },
     system: "You are Amp, an agentic coding tool. Answer tersely.",
     messages: [{ role: "user", content: "Reply with exactly: ok" }],
   };
@@ -43,8 +44,6 @@ for (const model of models) {
   );
   const text = await res.text();
   const ok = res.status === 200 && /"type":\s*"message_stop"/.test(text);
-  if (!ok) failed++;
+  if (!ok) process.exitCode = 1;
   console.log(`${model}: HTTP ${res.status}${ok ? " stream complete" : " " + text.slice(0, 160).replace(/\s+/g, " ")}`);
 }
-
-process.exit(failed ? 1 : 0);

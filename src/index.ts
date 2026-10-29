@@ -39,11 +39,10 @@ export function keysEqual(a: string, b: string): boolean {
 export default {
   async fetch(req: Request, env: Env): Promise<Response> {
     const url = new URL(req.url);
-    if (url.pathname === "/") return new Response("amp-claude-native proxy\n");
-
-    const key = /^Bearer\s+(\S+)$/i.exec(req.headers.get("authorization") ?? "")?.[1] ?? "";
-    if (!key || !keysEqual(key, env.PROXY_KEY)) return error(401, "authentication_error", "Invalid proxy key.");
-
+    // `!env.PROXY_KEY` keeps an unset secret from matching an empty header.
+    if (!env.PROXY_KEY || !keysEqual(req.headers.get("authorization") ?? "", `Bearer ${env.PROXY_KEY}`)) {
+      return error(401, "authentication_error", "Invalid proxy key.");
+    }
     const method = ROUTES[url.pathname];
     if (!method) return error(404, "not_found_error", `Not found: ${url.pathname}`);
     if (req.method !== method) return error(405, "invalid_request_error", "Method not allowed.");
@@ -57,12 +56,12 @@ export default {
       body = shapeBody(parsed as Record<string, unknown>);
     }
 
-    const headers = {
+    const headers: Record<string, string> = {
       authorization: `Bearer ${env.CLAUDE_TOKEN}`,
-      "content-type": "application/json",
       "anthropic-version": req.headers.get("anthropic-version") ?? "2023-06-01",
       "anthropic-beta": mergeBetas(req.headers.get("anthropic-beta"), body),
     };
+    if (method === "POST") headers["content-type"] = "application/json";
     try {
       return await fetch(UPSTREAM + url.pathname + url.search, {
         method,

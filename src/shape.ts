@@ -6,7 +6,7 @@
 // this text, as its own block (measured 2026-10-29; Haiku 4.5 did not care).
 export const CLAUDE_CODE_IDENTITY = "You are Claude Code, Anthropic's official CLI for Claude.";
 
-export const REQUIRED_BETAS = ["oauth-2025-04-20", "claude-code-20250219"];
+const REQUIRED_BETAS = ["oauth-2025-04-20", "claude-code-20250219"];
 // Manual-budget thinking (thinking.type === "enabled") needs this beta to
 // interleave thinking with tool use; adaptive-thinking models imply it.
 export const INTERLEAVED_THINKING_BETA = "interleaved-thinking-2025-05-14";
@@ -14,7 +14,7 @@ export const INTERLEAVED_THINKING_BETA = "interleaved-thinking-2025-05-14";
 // Models that only accept adaptive thinking. Amp does not know which Claude
 // model it talks to and may send `thinking: {type: "disabled"}` or a manual
 // budget, which these models reject with 400 (measured 2026-10-29, Opus 5.5).
-export const ADAPTIVE_ONLY_MODEL = /^claude-(opus-4-[789]|opus-5|fable-5|sonnet-5|haiku-5-5)/;
+const ADAPTIVE_ONLY_MODEL = /^claude-(opus-4-[789]|opus-5|fable-5|sonnet-5|haiku-5-5)/;
 
 type Json = Record<string, unknown>;
 
@@ -36,20 +36,23 @@ export function mergeBetas(incoming: string | null, body: Json): string {
   return [...betas].join(",");
 }
 
+/** Effort for a manual thinking budget; no budget (thinking disabled) means the lowest. */
 function effortForBudget(budget: unknown): string {
-  if (typeof budget !== "number") return "medium";
-  return budget < 4096 ? "low" : budget < 16384 ? "medium" : "high";
+  return typeof budget !== "number" || budget < 4096 ? "low" : budget < 16384 ? "medium" : "high";
 }
 
-/** Adaptive-only models: disabled or manual thinking becomes adaptive with an effort. */
+/**
+ * Adaptive-only models: disabled or manual thinking becomes adaptive with an
+ * effort. Sampling parameters go too, because Anthropic rejects them together
+ * with thinking.
+ */
 export function shapeThinking(body: Json): Json {
+  const thinking = body.thinking as Json | undefined;
   if (typeof body.model !== "string" || !ADAPTIVE_ONLY_MODEL.test(body.model)) return body;
+  if (thinking?.type !== "disabled" && thinking?.type !== "enabled") return body;
   const { temperature, top_p, top_k, ...out } = body;
-  const thinking = out.thinking as Json | undefined;
-  if (thinking?.type !== "disabled" && thinking?.type !== "enabled") return out;
   const config = (out.output_config ?? {}) as Json;
-  const effort = typeof config.effort === "string" ? config.effort
-    : thinking.type === "disabled" ? "low" : effortForBudget(thinking.budget_tokens);
+  const effort = typeof config.effort === "string" ? config.effort : effortForBudget(thinking.budget_tokens);
   return { ...out, thinking: { type: "adaptive" }, output_config: { ...config, effort } };
 }
 
