@@ -44,7 +44,7 @@ export function keysEqual(a: string, b: string): boolean {
 function authorized(req: Request, env: Env): boolean {
   const header = req.headers.get("authorization") ?? "";
   const m = /^Bearer\s+(\S+)\s*$/i.exec(header);
-  const presented = m?.[1] ?? req.headers.get("x-api-key") ?? "";
+  const presented = m?.[1] ?? "";
   return presented.length > 0 && keysEqual(presented, env.PROXY_KEY);
 }
 

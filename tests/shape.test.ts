@@ -112,6 +112,14 @@ test("worker: shapes the body and swaps the credential", async () => {
   }
 });
 
+test("worker: x-api-key alone is not accepted as the proxy key", async () => {
+  const res = await worker.fetch(
+    new Request("https://w.example/v1/messages", { method: "POST", headers: { "x-api-key": "proxy-key" }, body: "{}" }),
+    env("https://127.0.0.1:9"),
+  );
+  assert.equal(res.status, 401);
+});
+
 test("worker: unknown paths are not proxied", async () => {
   const res = await worker.fetch(
     new Request("https://w.example/v1/complete", { method: "POST", headers: { authorization: "Bearer proxy-key" }, body: "{}" }),

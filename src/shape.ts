@@ -79,7 +79,7 @@ export function mergeBetas(incoming: string | null, body: Json): string {
 // manual budget, which these models reject with 400 ("thinking.type.disabled"
 // is not supported for this model; measured 2026-10-29 with claude-opus-5-5).
 // Same family list as pi-claude-subscription's model table on 2026-10-29.
-export const ADAPTIVE_ONLY_MODEL = /^claude-(opus-4-[78]|opus-5|fable-5|sonnet-5|haiku-5)/;
+export const ADAPTIVE_ONLY_MODEL = /^claude-(opus-4-[789]|opus-5|fable-5|sonnet-5|haiku-5-5)/;
 
 function effortForBudget(budget: unknown): string {
   if (typeof budget !== "number") return "medium";
