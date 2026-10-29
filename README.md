@@ -9,8 +9,8 @@ lets Amp's servers send Anthropic Messages requests to a URL of your choice for 
 map to it. This proxy is that URL: it checks a shared key, swaps in a Claude Code OAuth setup
 token, shapes the request for Anthropic's OAuth lane and returns the response unchanged, streaming
 included. The connection serves every `anthropic/*` model ID, so the modes keep their native
-models and only the billing of the Claude ones changes. Subagents, thread titles and compaction
-run on the thread's model and follow it.
+models and only the billing of the Claude ones changes. Subagents, thread titles, compaction and
+Amp's cloud orbs run on the thread's model and follow the same routing.
 
 What the OAuth lane needs beyond a plain Messages request (all measured 2026-10-29, see
 `src/shape.ts`): the Claude Code identity as the first `system` block (Opus 4.6 answers 429
@@ -29,18 +29,27 @@ extra usage and API credits are not touched.
   `scripts/live-check.mjs` runs the handler in Node against the real API with this machine's
   Claude Code login.
 
+Requirements: Node 22.18 or newer (the `cf` CLI; this repo uses it through mise), Bun for the
+local server, the `amp` CLI signed in to the account that should use the subscription.
 Canonical copy: P720, `~/Work/amp-claude-native`.
 
 ## 1. Secrets
 
-- `claude setup-token` (opens the browser) prints a long-lived OAuth token that does not share
-  Claude Code's refresh chain. Store it in the vault as `amp-claude-native-claude-token`.
+- `claude setup-token` (opens the browser, needs a Claude Pro/Max login) prints a long-lived
+  OAuth token that does not share Claude Code's refresh chain. Store it in the vault as
+  `amp-claude-native-claude-token`. It expires after about a year and nobody refreshes it.
 - A random proxy key, `openssl rand -hex 32`, as `amp-claude-native-proxy-key`. Amp sends it as
   the connection's API key; the proxy accepts nothing else.
+- On <https://claude.ai/settings/usage> keep **extra usage** off unless you want Amp's traffic
+  to spend money once the included quota is used up. Nothing in a request can opt out of it.
 
 ## 2. Hosting
 
-Amp's servers call the proxy, so it needs a public HTTPS address. Two ways to get one:
+Amp's servers call the proxy, not your Amp client. So the proxy needs a public HTTPS address and
+must be reachable whenever any Amp thread runs, including cloud orbs that run while your
+workstation is off. That means either an external host such as a Cloudflare Worker, or a machine
+of yours that runs permanently and is exposed to the internet. A proxy on a laptop that sleeps
+breaks every Claude request in Amp, orbs included, while it is away.
 
 **Cloudflare Worker** (what runs today, `https://amp-claude-native.simon-gies.workers.dev`).
 No machine of yours involved, free tier, secrets stored encrypted on Cloudflare. After
@@ -55,8 +64,9 @@ mise exec -- npx cf deploy --secrets-file "$F"; shred -u "$F"
 
 `cf deploy` prints the URL. Redeploy the same way after a code or token change.
 
-**Local proxy** (the token never leaves your machine; your machine and internet uplink become a
-dependency for every Amp request, and the public entry point lands on your workstation):
+**Local proxy on an always-on machine** (the token never leaves that machine; its uptime and
+internet uplink become a dependency for every Amp request, and the public entry point lands on
+it):
 
 ```sh
 CLAUDE_TOKEN="$(rbw get amp-claude-native-claude-token)" PROXY_KEY="$(rbw get amp-claude-native-proxy-key)" bun scripts/serve.ts   # 127.0.0.1:8787
@@ -65,15 +75,17 @@ CLAUDE_TOKEN="$(rbw get amp-claude-native-claude-token)" PROXY_KEY="$(rbw get am
 Expose it with Tailscale Funnel (`sudo tailscale funnel --bg 8787`, gives
 `https://<host>.<tailnet>.ts.net`; the tailnet admin must enable Funnel once, the command prints
 the link) or a Cloudflare Tunnel (`cloudflared tunnel --url http://127.0.0.1:8787` prints a
-`trycloudflare.com` URL that lives as long as the process; with the Tunnel, Cloudflare still
-terminates TLS and sees the traffic, so it buys nothing over the Worker except local token
-storage). Run both as user systemd services if you keep them. Verified 2026-10-29 through a quick
-Tunnel: Amp threads, including a cloud orb thread, routed via the connection at $0.
+`trycloudflare.com` URL that lives as long as the process; a named tunnel gives a stable one. With
+a Tunnel, Cloudflare still terminates TLS and sees the traffic, so it buys nothing over the Worker
+except local token storage). Run the server and the tunnel as systemd services so they survive
+reboots. Verified 2026-10-29 through a quick Tunnel: Amp threads, including a cloud orb thread,
+routed via the connection at $0.
 
 ## 3. Amp connection and model routing
 
-Either run `scripts/amp-router.sh <proxy-url> [connection-id]`, or do the same in the web UI at
-<https://ampcode.com/settings/model-routing>:
+Either run `scripts/amp-router.sh <proxy-url> [connection-id]` (adds a personal connection; use
+`--workspace` in the script's `add-router` call for a shared one), or do the same in the web UI
+at <https://ampcode.com/settings/model-routing>:
 
 1. Add a connection of type **Custom URL**. Name it, API format **anthropic-messages**, base URL
    the proxy URL (Amp appends `/v1/messages`), API key the proxy key, no extra headers.
@@ -89,11 +101,12 @@ Either run `scripts/amp-router.sh <proxy-url> [connection-id]`, or do the same i
 
 ## Verify
 
-`amp config model-providers test <id>` calls `/v1/models` through the proxy. Run one thread in
-medium or ultra; `amp threads usage <thread> --details` must list the Claude model with Routing
-"Via <connection name>" and cost $0, for Agent, Task and Thread Title alike. Amp's cloud orbs
-(`amp -ox`) go through the same routing; verified 2026-10-29 with the Worker and with the local
-proxy behind a Tunnel.
+`amp config model-providers test <id>` calls `/v1/models` through the proxy. Then run one thread
+in medium or ultra and read `amp threads usage <thread> --details`: the Claude model must show
+Routing "Via <connection name>" and cost $0, for Agent, Task and Thread Title alike. Do the same
+once with `amp -ox` for an orb. Note that `amp config model-providers check-access` can name
+Amp's built-in "Subscription" connection for a Claude model even though real threads go through
+the proxy; the usage details of a real thread are the authority.
 
 ## Risks
 
@@ -102,6 +115,5 @@ servers. Anthropic has rejected other third-party OAuth clients since 2026-10-18
 block is what currently separates accepted from rejected requests; a block would hit the whole
 Claude account, Claude Code included. Amp and your own Claude Code share the subscription's
 5-hour and 7-day windows. A leaked proxy key spends that quota: rotate it (vault entry, redeploy,
-`scripts/amp-router.sh`) on suspicion. The setup token expires after about a year and nobody
-refreshes it; the connection then fails until a new one is deployed. Whether Amp falls back to
-credits when the proxy answers 429 was not tested.
+`scripts/amp-router.sh`) on suspicion. When the setup token expires or the proxy is down, Claude
+requests in Amp fail; whether Amp then falls back to credits was not tested.
