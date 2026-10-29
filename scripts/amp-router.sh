@@ -3,9 +3,9 @@
 #
 #   scripts/amp-router.sh <worker-url> [connection-id]
 #
-# The connection serves every anthropic/* model ID; pick Claude explicitly in
-# a mode (Tune Modes or a plugin mode such as amp/claude-modes.ts). The proxy
-# key is piped from the vault entry amp-claude-native-proxy-key, never printed.
+# The connection serves every anthropic/* model ID, so Amp's modes keep their
+# native models. The proxy key is piped from the vault entry
+# amp-claude-native-proxy-key, never printed.
 set -euo pipefail
 
 WORKER_URL=${1:?worker url, e.g. https://amp-claude-native.<subdomain>.workers.dev}

@@ -40,9 +40,13 @@ test("thinking: adaptive-only models get adaptive thinking instead of disabled/m
   );
 });
 
-test("thinking: everything else passes through unchanged", () => {
-  const manual = { model: "claude-opus-4-6", thinking: { type: "enabled", budget_tokens: 4096 }, temperature: 1 };
-  assert.deepEqual(shapeThinking(manual), manual);
+test("thinking: manual-thinking models and untouched requests pass through unchanged", () => {
+  for (const model of ["claude-opus-4-6", "claude-sonnet-4-6", "claude-haiku-4-5-20251001", "claude-sonnet-4-5-20250929"]) {
+    const manual = { model, thinking: { type: "enabled", budget_tokens: 4096 }, temperature: 1 };
+    assert.deepEqual(shapeThinking(manual), manual);
+  }
+  const unknownNewModel = shapeThinking({ model: "claude-opus-6", thinking: { type: "disabled" } });
+  assert.deepEqual(unknownNewModel.thinking, { type: "adaptive" });
   const adaptive = { model: "claude-opus-5-5", thinking: { type: "adaptive" }, temperature: 1 };
   assert.deepEqual(shapeThinking(adaptive), adaptive);
   const bare = { model: "claude-fable-5-1", max_tokens: 5, temperature: 1 };

@@ -2,18 +2,21 @@
 
 Claude models in Amp, served by a Claude Pro/Max subscription instead of Amp credits.
 
-Amp's built-in modes run OpenAI models, and its own "Claude Subscription" connection only covers
-the Claude Code mode. Amp's "Custom URL" model provider lets Amp's servers send Anthropic Messages
-requests to a URL of your choice for the model IDs you map to it. This Cloudflare Worker is that
-URL: it checks a shared key, swaps in a Claude Code OAuth setup token, shapes the request for
-Anthropic's OAuth lane and returns the response unchanged, streaming included. The connection
-serves every `anthropic/*` model ID, so Claude is used exactly where a mode asks for it; OpenAI
-modes stay on their own models.
+Amp's native modes use Claude for some of them (on 2026-10-29: medium on Opus 5.5, ultra on
+Fable 5.1; high on GPT-6 Astra, low on GLM-5.3-Flash), billed to Amp credits. Amp's own "Claude
+Subscription" connection only covers the Claude Code mode. Amp's "Custom URL" model provider
+lets Amp's servers send Anthropic Messages requests to a URL of your choice for the model IDs you
+map to it. This Cloudflare Worker is that URL: it checks a shared key, swaps in a Claude Code
+OAuth setup token, shapes the request for Anthropic's OAuth lane and returns the response
+unchanged, streaming included. The connection serves every `anthropic/*` model ID, so the modes
+keep their native models and only the billing of the Claude ones changes. Subagents, thread
+titles and compaction run on the thread's model and follow it.
 
 What the OAuth lane needs beyond a plain Messages request (all measured 2026-10-29, see
 `src/shape.ts`): the Claude Code identity as the first `system` block (Opus 4.6 answers 429
 without it), the betas `oauth-2025-04-20,claude-code-20250219`, no `anthropic/` prefix on the
-model ID, and adaptive thinking instead of disabled or budgeted thinking on adaptive-only models.
+model ID, and adaptive thinking instead of disabled or budgeted thinking on every model newer
+than Opus 4.6, Sonnet 4.6 and Haiku 4.5.
 Anthropic counts these requests against the subscription's 5-hour and 7-day windows (the
 `anthropic-ratelimit-unified-*` response headers); extra usage and API credits are not touched.
 
@@ -22,8 +25,6 @@ Anthropic counts these requests against the subscription's 5-hour and 7-day wind
 - `src/index.ts` fetch handler, `src/shape.ts` pure request shaping, `tests/` (`node --test tests/`).
 - `scripts/live-check.mjs` runs the handler in Node against the real API with this machine's
   Claude Code login; `scripts/amp-router.sh` creates or updates the Amp connection.
-- `amp/claude-modes.ts` optional Amp system plugin with `claude-low/medium/high` modes that
-  extend the built-in modes with Claude models.
 - `cloudflare.config.ts` the `cf` project; secrets `CLAUDE_TOKEN` and `PROXY_KEY`.
 
 Canonical copy: P720, `~/Work/amp-claude-native`.
@@ -46,8 +47,7 @@ Canonical copy: P720, `~/Work/amp-claude-native`.
    Usage** to *Allow Paid-Per-Token Usage* (ampcode.com/settings/model-routing); with
    *Subscription Only* Amp refuses Claude models outside Claude Code mode before any connection
    is consulted. Nothing is billed per token: the Worker uses the subscription.
-4. **Choose Claude in a mode:** pin a Claude model in Tune Modes, or install the plugin
-   (`cp amp/claude-modes.ts ~/.config/amp/plugins/`) and use `--mode claude-high`.
+4. **Leave Tune Modes on Auto** so each mode keeps its native model; a pin would move it.
 
 ## Verify
 
@@ -59,5 +59,7 @@ Canonical copy: P720, `~/Work/amp-claude-native`.
 
 Anthropic's OAuth lane is meant for Claude Code; this sends Amp's prompts through it from Amp's
 servers. Anthropic has rejected other third-party OAuth clients since 2026-10-18, and the identity
-block is what currently separates accepted from rejected requests. A leaked proxy key spends your
-subscription quota: rotate it (vault entry, redeploy, `scripts/amp-router.sh`) on suspicion.
+block is what currently separates accepted from rejected requests. Amp and your own Claude Code share the
+subscription's 5-hour and 7-day windows. A leaked proxy key spends that quota: rotate it (vault
+entry, redeploy, `scripts/amp-router.sh`) on suspicion. The setup token expires after about a
+year and is not refreshed by anyone; the connection then fails until a new one is deployed.

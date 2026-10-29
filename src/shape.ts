@@ -11,10 +11,11 @@ const REQUIRED_BETAS = ["oauth-2025-04-20", "claude-code-20250219"];
 // interleave thinking with tool use; adaptive-thinking models imply it.
 export const INTERLEAVED_THINKING_BETA = "interleaved-thinking-2025-05-14";
 
-// Models that only accept adaptive thinking. Amp does not know which Claude
-// model it talks to and may send `thinking: {type: "disabled"}` or a manual
-// budget, which these models reject with 400 (measured 2026-10-29, Opus 5.5).
-const ADAPTIVE_ONLY_MODEL = /^claude-(opus-4-[789]|opus-5|fable-5|sonnet-5|haiku-5-5)/;
+// Models that still take manual thinking budgets and `thinking: disabled`.
+// Every newer Claude model only accepts adaptive thinking and rejects what Amp
+// sends with 400 (measured 2026-10-29, Opus 5.5), so adaptive is the default
+// and this list is the exception; a model Amp switches to later needs no change.
+const MANUAL_THINKING_MODEL = /^claude-(opus-4-[0-6]|sonnet-4|haiku-4|3)/;
 
 type Json = Record<string, unknown>;
 
@@ -48,7 +49,7 @@ function effortForBudget(budget: unknown): string {
  */
 export function shapeThinking(body: Json): Json {
   const thinking = body.thinking as Json | undefined;
-  if (typeof body.model !== "string" || !ADAPTIVE_ONLY_MODEL.test(body.model)) return body;
+  if (typeof body.model !== "string" || MANUAL_THINKING_MODEL.test(body.model)) return body;
   if (thinking?.type !== "disabled" && thinking?.type !== "enabled") return body;
   const { temperature, top_p, top_k, ...out } = body;
   const config = (out.output_config ?? {}) as Json;
