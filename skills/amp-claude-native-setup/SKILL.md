@@ -15,7 +15,7 @@ You guide a human through hosting the proxy and wiring it into Amp. Rules for th
   user chooses to keep them. Browser logins are the user's; you wait for their confirmation.
 - Shell state does not survive between your tool calls. Start every block below with the
   preamble `cd <repo root> && export ACN=<path from step 1> PROXY_URL=<url from step 4>`, with
-  the literal values. Use bash (the `read` syntax below is bash's); on Windows, use WSL.
+  the literal values. bash or zsh; on Windows, use WSL.
 - Prefer asking over assuming: OS, hosting choice, existing tokens, account names.
 
 ## 0. Explain and confirm
@@ -65,7 +65,7 @@ lasts about a year and is not refreshed by anyone). Then the user, in their own 
 repo root with `ACN` set, pastes it without echo:
 
 ```sh
-umask 077; read -rs -p 'Claude token: ' T; printf '%s' "$T" | tr -d '[:space:]' > "$ACN/claude-token"; unset T; echo
+umask 077; printf 'Claude token: '; read -rs T; printf '%s' "$T" | tr -d '[:space:]' > "$ACN/claude-token"; unset T; echo
 openssl rand -hex 32 | tr -d '\n' > "$ACN/proxy-key"
 printf 'Authorization: Bearer %s\n' "$(cat "$ACN/proxy-key")" > "$ACN/auth-header"
 wc -c "$ACN/claude-token" "$ACN/proxy-key"      # sizes only; the key must be 64 bytes
@@ -102,6 +102,9 @@ printf 'CLAUDE_TOKEN=%s\nPROXY_KEY=%s\n' "$(cat "$ACN/claude-token")" "$(cat "$A
 nohup bun --env-file ~/.config/amp-claude-native.env scripts/serve.ts > /dev/null 2>&1 &     # 127.0.0.1:8787, for this test only
 curl -s -o /dev/null -w '%{http_code}\n' --retry 5 --retry-connrefused http://127.0.0.1:8787/v1/models   # expect 401
 ```
+
+If the curl fails because your harness reaped the background process, skip ahead to the service
+setup below and test again from there.
 
 Expose the port: `tailscale funnel --bg 8787` (Linux usually needs `sudo`; on macOS the CLI is
 `/Applications/Tailscale.app/Contents/MacOS/Tailscale`; Funnel must be enabled once for the
