@@ -1,0 +1,17 @@
+{
+  "name": "amp-claude-native",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Cloudflare Worker that serves Amp's Custom URL model provider from a Claude Pro/Max subscription",
+  "scripts": {
+    "test": "node --test tests/",
+    "live-check": "node scripts/live-check.mjs",
+    "deploy": "cf deploy"
+  },
+  "devDependencies": {
+    "@cloudflare/vite-plugin": "^2.0.0-beta.v.7",
+    "cf": "1.0.0-beta.21",
+    "vite": "^8.3.5"
+  }
+}
