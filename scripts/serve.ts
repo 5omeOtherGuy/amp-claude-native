@@ -1,7 +1,7 @@
 // Runs the same Worker as a local HTTP server (Bun), for hosting the proxy on
 // your own machine instead of Cloudflare. Secrets come from the environment:
 //
-//   CLAUDE_TOKEN=... PROXY_KEY=... bun scripts/serve.ts        # port 8787
+//   bun --env-file /path/to/0600-env-file scripts/serve.ts     # CLAUDE_TOKEN=..., PROXY_KEY=...; port 8787
 //
 // Amp's servers must reach it over public HTTPS, so put it behind a Tailscale
 // Funnel or a Cloudflare Tunnel (see README, "Hosting").
