@@ -20,6 +20,11 @@ MAPPING=$(cat <<'EOF'
 openai/gpt-5.6-terra -> claude-sonnet-4-6
 openai/gpt-6.1-sol -> claude-opus-4-6
 openai/gpt-6-astra -> claude-opus-5-5
+# Plugin modes from amp/claude-modes.ts request these IDs directly.
+anthropic/claude-sonnet-4-6 -> claude-sonnet-4-6
+anthropic/claude-opus-4-6 -> claude-opus-4-6
+anthropic/claude-opus-5-5 -> claude-opus-5-5
+anthropic/claude-fable-5-1 -> claude-fable-5-1
 EOF
 )
 

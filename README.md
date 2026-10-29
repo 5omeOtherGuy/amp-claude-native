@@ -67,6 +67,17 @@ Verify: `amp config model-providers test <id>` (GET /v1/models through the Worke
 you own>` must report `modelProviderName` of this connection and `ok: true`, and
 `amp threads usage <thread> --details` of a new high-mode thread must list the Claude model.
 
+## Plugin modes with Claude labels
+
+`amp/claude-modes.ts` is an Amp system plugin (copy it to `~/.config/amp/plugins/`) that registers
+`claude-low`, `claude-medium` and `claude-high`: the built-in modes' prompts and tools, with
+`anthropic/claude-*` models. Amp's own Claude Subscription connection does not serve those
+(measured 2026-10-29: a plugin-mode thread on anthropic/claude-opus-5-5 went "Via Amp" for $0.41
+of Amp credits), so the router mapping also lists the `anthropic/*` IDs; with that, the same mode
+went "Via Claude Subscription via amp-claude-native" at $0 and Amp shows "Opus 5.5" instead of an
+OpenAI name. Use `--mode claude-high` (or the picker). The built-in modes stay remapped too; drop
+the `openai/*` lines from the mapping to keep them on Amp's own models.
+
 ## Mode mapping
 
 Edit `MAPPING` in `scripts/amp-router.sh` and rerun it with the connection ID. Only exact Amp
