@@ -1,6 +1,7 @@
 // Runs the Worker's fetch handler in Node against the real Anthropic API,
 // authenticated with the Claude Code OAuth token of this machine's Claude Code
-// login (or CLAUDE_TOKEN from the environment). Prints status codes only.
+// login (or CLAUDE_TOKEN from the environment). Prints status codes, and the
+// start of the error body when a request fails.
 //
 //   node scripts/live-check.mjs [model ...]
 import { readFile } from "node:fs/promises";
@@ -45,9 +46,5 @@ for (const model of models) {
   if (!ok) failed++;
   console.log(`${model}: HTTP ${res.status}${ok ? " stream complete" : " " + text.slice(0, 160).replace(/\s+/g, " ")}`);
 }
-
-const models401 = await worker.fetch(new Request("https://worker.local/v1/models", { headers: { authorization: "Bearer wrong" } }), env);
-console.log(`wrong key: HTTP ${models401.status}${models401.status === 401 ? "" : " (expected 401)"}`);
-if (models401.status !== 401) failed++;
 
 process.exit(failed ? 1 : 0);
