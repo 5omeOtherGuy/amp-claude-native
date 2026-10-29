@@ -13,8 +13,9 @@ You guide a human through hosting the proxy and wiring it into Amp. Rules for th
 - Secrets (the Claude token, the proxy key) never appear in chat, logs or files you leave behind.
   Never read them yourself. They live only in `$ACN` (step 1), deleted in step 8, or where the
   user chooses to keep them. Browser logins are the user's; you wait for their confirmation.
-- Shell state does not survive between your tool calls. Every block below is run from the repo
-  root with `ACN` set as in step 1. Use bash or zsh; on Windows, use WSL.
+- Shell state does not survive between your tool calls. Start every block below with the
+  preamble `cd <repo root> && export ACN=<path from step 1> PROXY_URL=<url from step 4>`, with
+  the literal values. Use bash (the `read` syntax below is bash's); on Windows, use WSL.
 - Prefer asking over assuming: OS, hosting choice, existing tokens, account names.
 
 ## 0. Explain and confirm
@@ -70,8 +71,10 @@ printf 'Authorization: Bearer %s\n' "$(cat "$ACN/proxy-key")" > "$ACN/auth-heade
 wc -c "$ACN/claude-token" "$ACN/proxy-key"      # sizes only; the key must be 64 bytes
 ```
 
-Tell the user: on <https://claude.ai/settings/usage> keep **extra usage** off unless they want
-Amp traffic to spend money once the included quota is used up; no request can opt out of it.
+Ask the user to save both values in their password manager as well: step 8 deletes `$ACN`, and
+the yearly token renewal needs the existing proxy key again. Tell them: on
+<https://claude.ai/settings/usage> keep **extra usage** off unless they want Amp traffic to spend
+money once the included quota is used up; no request can opt out of it.
 
 ## 4a. Deploy as a Cloudflare Worker
 
@@ -94,9 +97,10 @@ can inject environment variables, or a 0600 env file of their choosing (for exam
 `~/.config/amp-claude-native.env`). Only that place may keep them. With an env file:
 
 ```sh
-mkdir -p ~/.config; umask 077; printf 'CLAUDE_TOKEN=%s\nPROXY_KEY=%s\n' "$(cat "$ACN/claude-token")" "$(cat "$ACN/proxy-key")" > ~/.config/amp-claude-native.env
-nohup bun --env-file ~/.config/amp-claude-native.env scripts/serve.ts > /dev/null 2>&1 &     # 127.0.0.1:8787
-curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8787/v1/models                      # expect 401
+mkdir -p ~/.config; rm -f ~/.config/amp-claude-native.env; umask 077
+printf 'CLAUDE_TOKEN=%s\nPROXY_KEY=%s\n' "$(cat "$ACN/claude-token")" "$(cat "$ACN/proxy-key")" > ~/.config/amp-claude-native.env
+nohup bun --env-file ~/.config/amp-claude-native.env scripts/serve.ts > /dev/null 2>&1 &     # 127.0.0.1:8787, for this test only
+curl -s -o /dev/null -w '%{http_code}\n' --retry 5 --retry-connrefused http://127.0.0.1:8787/v1/models   # expect 401
 ```
 
 Expose the port: `tailscale funnel --bg 8787` (Linux usually needs `sudo`; on macOS the CLI is
@@ -104,17 +108,19 @@ Expose the port: `tailscale funnel --bg 8787` (Linux usually needs `sudo`; on ma
 tailnet, the command prints the admin link; the user does that in the browser) or
 `nohup cloudflared tunnel --url http://127.0.0.1:8787 &` (temporary URL in its output; a named
 tunnel gives a stable one). Record the public URL as `PROXY_URL`, no trailing slash.
-Then make both survive reboots: on Linux a user systemd service per process
+Then make both survive reboots: stop the two test processes first (`kill %1 %2` in that shell,
+or `pkill -f 'scripts/serve.ts'` and the cloudflared process), so the services, not the test
+processes, own the port. On Linux one user systemd service per process
 (`systemctl --user edit --force --full amp-claude-native.service`, `EnvironmentFile=` pointing
 at the env file, `WantedBy=default.target`, `loginctl enable-linger`), on macOS a launchd agent in
-`~/Library/LaunchAgents`. Verify with a restart of the service that `$PROXY_URL/v1/models`
-still answers.
+`~/Library/LaunchAgents`. Restart the services and only then run step 5; with a cloudflared
+quick tunnel the URL changes on every restart, so read it from the service log again.
 
 ## 5. Verify the proxy directly
 
 ```sh
 curl -s -o /dev/null -w '%{http_code}\n' "$PROXY_URL/v1/models"                       # expect 401
-curl -s -w '\n%{http_code}\n' -H @"$ACN/auth-header" "$PROXY_URL/v1/models" | tail -1  # expect 200
+curl -s -w '\n%{http_code}\n' -H @"$ACN/auth-header" "$PROXY_URL/v1/models" | tail -c 300   # expect 200; on 401 the body tells which secret failed
 ```
 
 401 whose body says `Invalid proxy key.` means a wrong proxy key; any other 401 is Anthropic
@@ -157,9 +163,9 @@ connection whose mapping matches `anthropic/*`. Wait for the user to confirm all
 `rm -rf "$ACN"`. No command above carried a secret value, so shell history is clean; the
 Cloudflare login from 4a and the env file from 4b are the user's and stay. Tell the user:
 
-- Token renewal (about yearly): new `claude setup-token`, put it in a fresh `$ACN/claude-token`,
-  keep the existing proxy key, redeploy (4a) or rewrite the env file and restart (4b); Amp needs
-  no change.
+- Token renewal (about yearly): new `claude setup-token` into a fresh `$ACN/claude-token`, the
+  existing proxy key from their password manager into `$ACN/proxy-key`, then redeploy (4a) or
+  rewrite the env file and restart (4b); Amp needs no change.
 - Suspected key leak: new `proxy-key`, redeploy or restart, then
   `scripts/amp-router.sh "$PROXY_URL" <connection-id> < "$ACN/proxy-key"`.
 - When the proxy is down or the subscription window is exhausted, Claude requests in Amp fail
