@@ -62,11 +62,13 @@ dependency for every Amp request, and the public entry point lands on your works
 CLAUDE_TOKEN="$(rbw get amp-claude-native-claude-token)" PROXY_KEY="$(rbw get amp-claude-native-proxy-key)" bun scripts/serve.ts   # 127.0.0.1:8787
 ```
 
-Expose it with Tailscale Funnel (`tailscale funnel 8787`, gives `https://<host>.<tailnet>.ts.net`)
-or a Cloudflare Tunnel (`cloudflared tunnel --url http://127.0.0.1:8787`; with the Tunnel,
-Cloudflare still terminates TLS and sees the traffic, so it buys nothing over the Worker except
-local token storage). Run it as a user systemd service if you keep it. Verified 2026-10-29 that
-`scripts/serve.ts` proxies correctly on localhost; the exposure step was not set up here.
+Expose it with Tailscale Funnel (`sudo tailscale funnel --bg 8787`, gives
+`https://<host>.<tailnet>.ts.net`; the tailnet admin must enable Funnel once, the command prints
+the link) or a Cloudflare Tunnel (`cloudflared tunnel --url http://127.0.0.1:8787` prints a
+`trycloudflare.com` URL that lives as long as the process; with the Tunnel, Cloudflare still
+terminates TLS and sees the traffic, so it buys nothing over the Worker except local token
+storage). Run both as user systemd services if you keep them. Verified 2026-10-29 through a quick
+Tunnel: Amp threads, including a cloud orb thread, routed via the connection at $0.
 
 ## 3. Amp connection and model routing
 
@@ -89,7 +91,9 @@ Either run `scripts/amp-router.sh <proxy-url> [connection-id]`, or do the same i
 
 `amp config model-providers test <id>` calls `/v1/models` through the proxy. Run one thread in
 medium or ultra; `amp threads usage <thread> --details` must list the Claude model with Routing
-"Via <connection name>" and cost $0, for Agent, Task and Thread Title alike.
+"Via <connection name>" and cost $0, for Agent, Task and Thread Title alike. Amp's cloud orbs
+(`amp -ox`) go through the same routing; verified 2026-10-29 with the Worker and with the local
+proxy behind a Tunnel.
 
 ## Risks
 
